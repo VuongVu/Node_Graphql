@@ -2,12 +2,16 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
+import helmet from 'helmet';
 import mongoose from 'mongoose';
 import graphqlHTTP from 'express-graphql';
+import { buildSchema } from 'graphql';
+import mongoConfig from './config/mongodb';
 
-import schema from '../graphql';
+// Init Express app
+const app = express();
 
-const MONGO_URL = 'mongodb://vuongvu:123456@ds153732.mlab.com:53732/graphql';
+const MONGO_URL = app.get('env') === 'development' ? mongoConfig.development.url : mongoConfig.production.url;
 
 // Connect to mongodb
 mongoose.connect(MONGO_URL, { useMongoClient: true });
@@ -16,26 +20,36 @@ db.on('error', () => {
   console.log('Failed to connect to database.');
 });
 db.once('open', () => {
-  console.log('Connect to database');
+  console.log(`Connect to database at ${MONGO_URL}`);
 });
 
-// Init Express app
-const app = express();
-
 // Middlewares
+app.use(helmet());
 app.use(logger(app.get('env') === 'development' ? 'dev' : 'common'));
 app.use(cookieParser());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// First render
-app.get('/', (req, res) => {
-  res.send('Hello Graphql');
-});
+const schema = buildSchema(`
+  type Query {
+    postTitle: String,
+    blogTitle: String
+  }
+`);
+
+const root = {
+  postTitle: () => {
+    return 'Build a Simple GraphQL Server With Express and NodeJS';
+  },
+  blogTitle: () => {
+    return 'scotch.io';
+  }
+};
 
 // Graphql API endpoint
-app.use('/graphql', graphqlHTTP({
+app.use('/', graphqlHTTP({
   schema,
+  rootValue: root,
   graphiql: true,
   pretty: true
 }));
